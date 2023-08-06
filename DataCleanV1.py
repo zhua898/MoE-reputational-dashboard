@@ -68,25 +68,58 @@ df['User Profile Url'] = df['User Profile Url'].fillna('NULL')
 print(df['User Profile Url'].head(10))
 
 
-
-#column: Hit Sentence
-#replace NaN values with 'null'
-df['Hit Sentence'] = df['Hit Sentence'].fillna('NULL')
 #Sheffin
+#column: Hit Sentence
+#firstly replace NaN values with 'null'
+df['Hit Sentence'] = df['Hit Sentence'].fillna('NULL')
+
 # remove stop words, punctuation, and numbers or digits from the Hit sentence column
 def process_text(text):
+    #lowercase content
     text = text.lower()
 
+    #remove punctuation
     text = ''.join([char for char in text if char not in string.punctuation])
+
+    #remove digits
     text = re.sub(r'\d+', '', text)
 
-    tokens = text.split()
-    tokens = [token for token in tokens if token not in ENGLISH_STOP_WORDS]
-    text = ' '.join(tokens)
-    return text
+    #remove stop words
+    # tokens = text.split()
+    # tokens = [token for token in tokens if token not in ENGLISH_STOP_WORDS]
+    # text = ' '.join(tokens)
+
+    #remove URLs
+    text = re.sub(r'http\S+', '', text)
+
+    #Remove Twitter mentions
+    text = re.sub(r'@\w+', '', text)
+
+    #Remove common words in Twitter (Example: "rt", "re", "amp" which refers to retweet, reply and "&")
+    text = text.replace('rt', '') #retweets
+    text = text.replace('amp', '') # &
+    text = text.replace('re', '') #reply
+
+    #remove additional special characters
+    text = re.sub(r'[^a-zA-Z\s]', '', text)
+
+    #remove specific common words
+    # text = text.replace('nz','')
+
+    #remove non-ASCII characters
+    text = ''.join(character for character in text if ord(character) < 128)
+
+    return text.strip()
+
+#apply the defined process_text function to the column
 df['Hit Sentence'] = df['Hit Sentence'].apply(process_text)
+#print 10 sample data to check
 print(df['Hit Sentence'].head(10))
 
+
+
+
+#Sentiment rating from textblob
 sentiments = []
 for index, row in df.iterrows():
     text_to_analyze = row['Hit Sentence']
