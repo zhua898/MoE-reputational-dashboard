@@ -6,7 +6,7 @@ from nltk.corpus import stopwords
 from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS
 import string
 import re
-
+from nltk.stem import PorterStemmer
 
 #ctrl + / = comment
 #pandas default UTF-8 and comma as separator
@@ -73,10 +73,26 @@ print(df['User Profile Url'].head(10))
 #firstly replace NaN values with 'null'
 df['Hit Sentence'] = df['Hit Sentence'].fillna('NULL')
 
+#phrasal verb
+ps = PorterStemmer()
+phrasal_verb_dict = {
+    'add up': 'calculate',
+    'break out of': 'abandon',
+    'bear on': 'influence',
+    'broke down': 'collapse',
+    'buy out': 'purchase',
+    'buy up': 'purchase',
+    'call for': 'require'
+}
+
 # remove stop words, punctuation, and numbers or digits from the Hit sentence column
 def process_text(text):
     #lowercase content
     text = text.lower()
+
+    #replace phrasal verbs
+    for phrasal, replacement in phrasal_verb_dict.items():
+        text = text.replace(phrasal, replacement)
 
     #remove punctuation
     text = ''.join([char for char in text if char not in string.punctuation])
@@ -84,16 +100,18 @@ def process_text(text):
     #remove digits
     text = re.sub(r'\d+', '', text)
 
-    #remove stop words
-    # tokens = text.split()
-    # tokens = [token for token in tokens if token not in ENGLISH_STOP_WORDS]
-    # text = ' '.join(tokens)
-
     #remove URLs
     text = re.sub(r'http\S+', '', text)
 
     #Remove Twitter mentions
     text = re.sub(r'@\w+', '', text)
+
+    #stem words
+    text = ' '.join([ps.stem(word) for word in text.split()])
+
+    #remove stopwords
+    stop_words = set(stopwords.words('english'))
+    text = ' '.join([word for word in text.split() if word not in stop_words])
 
     #Remove common words in Twitter (Example: "rt", "re", "amp" which refers to retweet, reply and "&")
     text = text.replace('rt', '') #retweets
@@ -152,6 +170,7 @@ plt.xlabel('Sentiment')
 plt.ylabel('Frequency')
 plt.annotate(f'Mean: {mean_sentiment:.5f}', xy=(0.05, 0.85), xycoords='axes fraction')
 plt.show()
+
 
 
 
