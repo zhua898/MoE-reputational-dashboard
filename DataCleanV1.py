@@ -2,6 +2,11 @@ import pandas as pd
 from textblob import TextBlob
 import matplotlib.pyplot as plt
 import numpy as np
+from nltk.corpus import stopwords
+from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS
+import string
+import re
+
 
 #ctrl + / = comment
 #pandas default UTF-8 and comma as separator
@@ -51,31 +56,51 @@ print(df['Twitter Id'].head(20))
 #count most appeared twitter ID/ tweet ID
 
 
-#Column: User Profile Url
+#Column: URL & User Profile Url
 #Remove https:// and replace NaN values with 'NULL'(non-tweets)
+df['URL'] = df['URL'].str.replace('https://', '')
+df['URL'] = df['URL'].str.replace('http://', '')
+df['URL'] = df['URL'].fillna('NULL')
+
 df['User Profile Url'] = df['User Profile Url'].str.replace('https://', '')
 df['User Profile Url'] = df['User Profile Url'].str.replace('http://', '')
 df['User Profile Url'] = df['User Profile Url'].fillna('NULL')
 print(df['User Profile Url'].head(10))
 
-#because csv would change ID to scientific notation, the format is changed to xlsx for the output
-df.to_excel('processed_meltwater_report.xlsx',index=False)
 
 
-#benchmark with Meltwater report
-#Analyze sentiment based on 'Hit Sentence' column; negative = -1, neutral = 0, positive = 1
-if 'Hit Sentence' in df.columns:
-    text_column = 'Hit Sentence'
-# else:
-#     text_column = 'Headline'
+#column: Hit Sentence
+#replace NaN values with 'null'
+df['Hit Sentence'] = df['Hit Sentence'].fillna('NULL')
+#Sheffin
+# remove stop words, punctuation, and numbers or digits from the Hit sentence column
+def process_text(text):
+    text = text.lower()
+
+    text = ''.join([char for char in text if char not in string.punctuation])
+    text = re.sub(r'\d+', '', text)
+
+    tokens = text.split()
+    tokens = [token for token in tokens if token not in ENGLISH_STOP_WORDS]
+    text = ' '.join(tokens)
+    return text
+df['Hit Sentence'] = df['Hit Sentence'].apply(process_text)
+print(df['Hit Sentence'].head(10))
+
 sentiments = []
 for index, row in df.iterrows():
-    text_to_analyze = row[text_column]
-    pd.notna(row[text_column])
-    #else row['Headline']
+    text_to_analyze = row['Hit Sentence']
     if pd.notna(text_to_analyze):
         analysis = TextBlob(text_to_analyze)
-        sentiments.append(analysis.sentiment.polarity)
+        sentiment_polarity = analysis.sentiment.polarity
+
+        # Classify the sentiment
+        if sentiment_polarity < 0:
+            sentiments.append(-1)
+        elif sentiment_polarity == 0:
+            sentiments.append(0)
+        else:
+            sentiments.append(1)
 
 # Compute summary statistics for the sentiment polarities; use of numpy package
 mean_sentiment = np.mean(sentiments)
@@ -111,6 +136,11 @@ print(summary_df)
 #transform the summary stats to new CSV file
 summary_df.to_csv('summary_stats.csv')
 
+
+
+
+#because csv would change ID to scientific notation, the format is changed to xlsx for the output
+df.to_excel('processed_meltwater_report.xlsx',index=False)
 
 
 
