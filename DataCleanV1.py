@@ -7,6 +7,8 @@ from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS
 import string
 import re
 from nltk.stem import PorterStemmer
+from vader_sentiment.vader_sentiment import SentimentIntensityAnalyzer
+
 
 #ctrl + / = comment
 #pandas default UTF-8 and comma as separator
@@ -87,12 +89,9 @@ phrasal_verb_dict = {
 
 # remove stop words, punctuation, and numbers or digits from the Hit sentence column
 def process_text(text):
-    #lowercase content
-    text = text.lower()
-
     #replace phrasal verbs
-    for phrasal, replacement in phrasal_verb_dict.items():
-        text = text.replace(phrasal, replacement)
+    #for phrasal, replacement in phrasal_verb_dict.items():
+    #    text = text.replace(phrasal, replacement)
 
     #remove punctuation
     text = ''.join([char for char in text if char not in string.punctuation])
@@ -107,13 +106,13 @@ def process_text(text):
     text = re.sub(r'@\w+', '', text)
 
     #stem words
-    text = ' '.join([ps.stem(word) for word in text.split()])
+    #text = ' '.join([ps.stem(word) for word in text.split()])
 
-    #remove stopwords
-    stop_words = set(stopwords.words('english'))
-    text = ' '.join([word for word in text.split() if word not in stop_words])
+    #remove stopwords (HUGE IMPACT ON SENTIMENT RATING)
+    #stop_words = set(stopwords.words('english'))
+    #text = ' '.join([word for word in text.split() if word not in stop_words])
 
-    #Remove common words in Twitter (Example: "rt", "re", "amp" which refers to retweet, reply and "&")
+    #Remove common words in Twitter (Example: "rt", "re", "amp" which refers to retweet, reply and "&") !! (HUGE IMPACT ON SENTIMENT RATING)
     text = text.replace('rt', '') #retweets
     text = text.replace('amp', '') # &
     text = text.replace('re', '') #reply
@@ -137,7 +136,7 @@ print(df['Hit Sentence'].head(10))
 
 
 
-#Sentiment rating from textblob
+#TEXTBLOB sentiment rating
 sentiments = []
 for index, row in df.iterrows():
     text_to_analyze = row['Hit Sentence']
@@ -170,6 +169,50 @@ plt.xlabel('Sentiment')
 plt.ylabel('Frequency')
 plt.annotate(f'Mean: {mean_sentiment:.5f}', xy=(0.05, 0.85), xycoords='axes fraction')
 plt.show()
+
+
+
+#VADER: Valence Aware Dictionary and sentiment Reasoner
+#Tolerance is 0.05 under/above which it is classified as negative/positive
+analyzer = SentimentIntensityAnalyzer()
+def vader_analysis(text):
+    va = analyzer.polarity_scores(text)
+    #positive sentiment
+    if va['compound'] >= 0.05:
+        return 1
+    #negative sentiment
+    elif va['compound'] <= -0.05:
+        return -1
+    #neutral sentiment
+    else:
+        return 0
+
+df['Vader_Sentiment'] = df['Hit Sentence'].apply(vader_analysis)
+#print(df[['Hit Sentence', 'Vader_Sentiment']].head(10))
+
+#get count for each sentiment
+sentiment_counts = df['Vader_Sentiment'].value_counts().sort_index()
+
+# Plot the distribution of VADER sentiment values
+plt.figure(figsize=(10,6))
+bars = plt.bar(sentiment_counts.index, sentiment_counts.values, color=['red', 'gray', 'green'])
+
+# Add title and labels
+plt.title('Distribution of VADER Sentiments')
+plt.xlabel('Sentiment')
+plt.ylabel('Number of Records')
+plt.xticks(ticks=[-1, 0, 1], labels=['Negative', 'Neutral', 'Positive'], rotation=0)
+plt.tight_layout()
+
+# Add counts on top of each bar
+for bar in bars:
+    yval = bar.get_height()
+    plt.text(bar.get_x() + bar.get_width()/2, yval + 20, round(yval, 2), ha='center', va='bottom')
+plt.show()
+
+
+
+
 
 
 
