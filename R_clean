@@ -1,0 +1,132 @@
+---
+title: "MoE-reputational-dashboard"
+output: html_document
+date: "2023-08-10"
+---
+
+Initiate libray
+```{r}
+library(syuzhet)
+library(tidytext)
+library(dplyr)
+library(readxl)
+library(tidyverse)
+
+
+```
+
+
+
+```{r}
+meltwater_1 <- read_excel("processed_meltwater_report.xlsx")
+
+
+```
+
+
+```{r}
+get_recoded_sentiment <- function(text, method) {
+  sentiment_score <- get_sentiment(text, method = method)
+  #assign value to positive, neutral and negative
+  recoded_sentiment <- case_when(
+    sentiment_score > 0 ~ 1,
+    sentiment_score == 0 ~ 0,
+    sentiment_score < 0 ~ -1
+  )
+  
+  return(recoded_sentiment)
+}
+
+methods <- c("syuzhet", "bing", "afinn", "nrc")
+
+for (method in methods) {
+  meltwater_1[[paste0(method, "_recode_sentiment")]] <- sapply(meltwater_1$`Hit Sentence`, get_recoded_sentiment, method = method)
+}
+
+#bar charts display
+for (method in methods) {
+  print(paste("Counts for method:", method))
+  sentiment_counts <- table(meltwater_1[[paste0(method, "_recode_sentiment")]])
+  print(as.data.frame(sentiment_counts))
+  
+  bar_chart <- ggplot(as.data.frame(sentiment_counts), aes(x = Var1, y = Freq)) +
+    geom_bar(stat = "identity", fill = c("red", "grey", "blue")) +
+    labs(title = paste("Sentiment Distribution using", method), x = "Sentiment", y = "Count") +
+    scale_x_discrete(labels = c("-1" = "Negative", "0" = "Neutral", "1" = "Positive")) +
+    geom_text(aes(label = Freq), vjust = -0.5)
+  
+  print(bar_chart)
+  
+  
+}
+
+
+
+
+
+```
+
+
+
+
+```{r}
+
+
+
+```
+
+
+
+
+```{r}
+
+
+
+```
+
+
+
+```{r}
+
+
+
+```
+
+
+
+
+```{r}
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
