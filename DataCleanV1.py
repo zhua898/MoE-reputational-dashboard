@@ -8,7 +8,9 @@ import string
 import re
 from nltk.stem import PorterStemmer
 from vader_sentiment.vader_sentiment import SentimentIntensityAnalyzer
-
+from wordcloud import WordCloud
+from collections import Counter
+import openpyxl
 
 #ctrl + / = comment
 #pandas default UTF-8 and comma as separator
@@ -212,7 +214,32 @@ plt.show()
 
 
 
+#8/13
+#word cloud
+#combine all text in hit sentence into one single string
+concat_text = " ".join(sentence for sentence in df['Hit Sentence'] if sentence != 'NULL')
+wordcloud = WordCloud(background_color="white", max_words=100, contour_width=3, contour_color='steelblue').generate(concat_text)
+plt.figure(figsize=(10,6))
+plt.imshow(wordcloud, interpolation='bilinear')
+plt.axis('off')
+plt.title("Most Used Words/Topics in Hit Sentence")
+plt.show()
 
+#generate a new column which list the most mentioned words and its count
+def tokenize(sentence):
+    words = re.findall(r'\b\w+\b', sentence)
+    return words
+
+# Combine all 'Hit Sentence' into one list
+all_words = [word for sentence in df['Hit Sentence'] for word in tokenize(sentence)]
+# Count word occurrence using the Counter method
+word_counts = Counter(all_words)
+# Get most common words and rank them
+most_common_words = word_counts.most_common(100)
+#use loc to make sure the column align correct
+words, counts = zip(*most_common_words)
+df.loc[:len(words)-1, 'Most Common Words'] = words
+df.loc[:len(counts)-1, 'Count for most common words'] = counts
 
 
 
