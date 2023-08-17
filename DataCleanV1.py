@@ -11,6 +11,13 @@ from vader_sentiment.vader_sentiment import SentimentIntensityAnalyzer
 from wordcloud import WordCloud
 from collections import Counter
 import openpyxl
+import nltk
+from gensim import corpora
+from gensim.models import LdaModel, Phrases
+from nltk.stem import  WordNetLemmatizer
+
+
+
 
 #ctrl + / = comment
 #pandas default UTF-8 and comma as separator
@@ -240,6 +247,72 @@ most_common_words = word_counts.most_common(100)
 words, counts = zip(*most_common_words)
 df.loc[:len(words)-1, 'Most Common Words'] = words
 df.loc[:len(counts)-1, 'Count for most common words'] = counts
+
+
+#
+# #8/14
+# #LDA
+# #Tokenization, stopword removal
+# nltk.download('stopwords')
+# combined_text = ' '.join(df['Hit Sentence'])
+# excluded_words = {'stated', 'going', 'null'}
+# stop_words = set(stopwords.words('english')).union(excluded_words)
+# texts = [
+#     [word for word in combined_text.lower().split() if word not in stop_words and len(word) > 2]
+# ]
+# #create dictionary and corpus for LDA
+# dictionary = corpora.Dictionary(texts)
+# # dictionary.filter_extremes(no_below=1, no_above=0.9)
+# corpus = [dictionary.doc2bow(text) for text in texts]
+# #LDA model implementation
+# num_topics = 3
+# lda = LdaModel(corpus, num_topics=num_topics, id2word=dictionary, passes=15)
+# #print most popular topics
+# topics = lda.print_topics(num_words=10)
+# for topic in topics:
+#     print(topic)
+
+
+#8/18
+nltk.download('stopwords')
+nltk.download('wordnet')
+
+lemmatizer = WordNetLemmatizer()
+#exclude useless words
+excluded_words = {'stated', 'going', 'null'}
+stop_words = set(stopwords.words('english')).union(excluded_words)
+
+#tokenize, remove stopwords, lemmatize and filter non-alpha tokens
+sentences = [nltk.word_tokenize(sent.lower()) for sent in df['Hit Sentence']]
+cleaned_sentences = [
+    [lemmatizer.lemmatize(token) for token in sentence if token not in stop_words and len(token) > 2 and token.isalpha()]
+    for sentence in sentences
+]
+
+#list possible combination of 2/3 common words
+bigram_model = Phrases(cleaned_sentences, min_count=5, threshold=100)
+trigram_model = Phrases(bigram_model[cleaned_sentences], threshold=100)
+tokens_with_bigrams = [bigram_model[sent] for sent in cleaned_sentences]
+tokens_with_trigrams = [trigram_model[bigram_model[sent]] for sent in tokens_with_bigrams]
+
+#flatten list of sentences for LDA
+all_tokens = [token for sentence in tokens_with_trigrams for token in sentence]
+#corpus for LDA
+dictionary = corpora.Dictionary([all_tokens])
+corpus = [dictionary.doc2bow(text) for text in [all_tokens]]
+
+#LDA implementation
+num_topics = 3
+lda = LdaModel(corpus, num_topics = num_topics, id2word=dictionary, passes=15)
+
+topics = lda.print_topics(num_words=10)
+for topic in topics:
+    print(topic)
+
+
+
+
+
 
 
 
