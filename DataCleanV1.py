@@ -15,8 +15,15 @@ import nltk
 from gensim import corpora
 from gensim.models import LdaModel, Phrases
 from nltk.stem import  WordNetLemmatizer
-
-
+import pyLDAvis.gensim_models as gensimvis
+import pyLDAvis
+import requests
+from bs4 import BeautifulSoup
+from gensim.corpora import Dictionary
+from nltk.tokenize import word_tokenize
+from nltk.corpus import stopwords
+from langdetect import detect, lang_detect_exception
+from langdetect.lang_detect_exception import LangDetectException
 
 
 #ctrl + / = comment
@@ -69,12 +76,12 @@ print(df['Twitter Id'].head(20))
 
 #Column: URL & User Profile Url
 #Remove https:// and replace NaN values with 'NULL'(non-tweets)
-df['URL'] = df['URL'].str.replace('https://', '')
-df['URL'] = df['URL'].str.replace('http://', '')
+# df['URL'] = df['URL'].str.replace('https://', '')
+# df['URL'] = df['URL'].str.replace('http://', '')
 df['URL'] = df['URL'].fillna('NULL')
 
-df['User Profile Url'] = df['User Profile Url'].str.replace('https://', '')
-df['User Profile Url'] = df['User Profile Url'].str.replace('http://', '')
+# df['User Profile Url'] = df['User Profile Url'].str.replace('https://', '')
+# df['User Profile Url'] = df['User Profile Url'].str.replace('http://', '')
 df['User Profile Url'] = df['User Profile Url'].fillna('NULL')
 print(df['User Profile Url'].head(10))
 
@@ -249,31 +256,10 @@ df.loc[:len(words)-1, 'Most Common Words'] = words
 df.loc[:len(counts)-1, 'Count for most common words'] = counts
 
 
-#
-# #8/14
-# #LDA
-# #Tokenization, stopword removal
-# nltk.download('stopwords')
-# combined_text = ' '.join(df['Hit Sentence'])
-# excluded_words = {'stated', 'going', 'null'}
-# stop_words = set(stopwords.words('english')).union(excluded_words)
-# texts = [
-#     [word for word in combined_text.lower().split() if word not in stop_words and len(word) > 2]
-# ]
-# #create dictionary and corpus for LDA
-# dictionary = corpora.Dictionary(texts)
-# # dictionary.filter_extremes(no_below=1, no_above=0.9)
-# corpus = [dictionary.doc2bow(text) for text in texts]
-# #LDA model implementation
-# num_topics = 3
-# lda = LdaModel(corpus, num_topics=num_topics, id2word=dictionary, passes=15)
-# #print most popular topics
-# topics = lda.print_topics(num_words=10)
-# for topic in topics:
-#     print(topic)
 
 
 #8/18
+#LDA
 nltk.download('stopwords')
 nltk.download('wordnet')
 
@@ -309,11 +295,66 @@ topics = lda.print_topics(num_words=10)
 for topic in topics:
     print(topic)
 
+lda_display = gensimvis.prepare(lda, corpus, dictionary, sort_topics=False)
+pyLDAvis.display(lda_display)
+pyLDAvis.save_html(lda_display, 'ldaTweet.html')
 
 
 
 
+#WEB SCRAPING
+#delete tweet website , keep only non tweet and store in new column
+#do web scraping and combine all text data in one column
+#DO LDA
+# URLs
+urls = df['URL'].tolist()
+# Filter out Twitter URLs
+non_twitter_urls = [url for url in urls if "twitter.com" not in url]
 
+# Web scraping
+news_sentences = []
+for url in non_twitter_urls:
+    try:
+        response = requests.get(url)
+        soup = BeautifulSoup(response.content, 'html.parser')
+        # Extract text based on <p> tags
+        paragraphs = [p.get_text() for p in soup.find_all('p')]
+        news_sentences.append(' '.join(paragraphs))
+    except Exception as e:
+        print(f"Error processing URL {url}: {e}")
+        news_sentences.append("")
+
+# Filter out non-English content
+english_news = []
+for news in news_sentences:
+    try:
+        if detect(news) == 'en':
+            english_news.append(news)
+    except LangDetectException:
+        pass
+
+# Tokenization
+nltk.download('stopwords')
+nltk.download('wordnet')
+lemmatizer = WordNetLemmatizer()
+expanded_stopwords = set(stopwords.words('english')).union({"said", "would", "also", "one"})
+
+documents = []
+for sentence in english_news:
+    tokens = [lemmatizer.lemmatize(token) for token in word_tokenize(sentence.lower()) if token not in expanded_stopwords and token.isalpha()]
+    # Consider keeping only nouns for better topic clarity (requires POS tagging)
+    tokens = [token for token, pos in nltk.pos_tag(tokens) if pos.startswith('NN')]
+    documents.append(tokens)
+
+dictionary = Dictionary(documents)
+corpus = [dictionary.doc2bow(text) for text in documents]
+lda = LdaModel(corpus, num_topics=3, id2word=dictionary, passes=15)
+topics = lda.print_topics(num_words=10)
+for topic in topics:
+    print(topic)
+lda_display = gensimvis.prepare(lda, corpus, dictionary, sort_topics=False)
+pyLDAvis.display(lda_display)
+pyLDAvis.save_html(lda_display, 'ldaWeb.html')
 
 
 
