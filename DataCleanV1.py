@@ -86,6 +86,8 @@ df['User Profile Url'] = df['User Profile Url'].fillna('NULL')
 print(df['User Profile Url'].head(10))
 
 
+
+
 #Sheffin
 #column: Hit Sentence
 #firstly replace NaN values with 'null'
@@ -149,6 +151,21 @@ df['Hit Sentence'] = df['Hit Sentence'].apply(process_text)
 #print 10 sample data to check
 print(df['Hit Sentence'].head(10))
 
+
+#Column: Sentiment
+# replace neutral positive negative with 0 1 -1
+def map_sentiment(sentiment):
+    if sentiment == 'neutral':
+        return 0
+    if sentiment == 'not rated':
+        return 0
+    if sentiment == 'positive':
+        return 1
+    if sentiment == 'negative':
+        return -1
+    else:
+        return None
+df['Meltwater_sentiment'] = df['Sentiment'].apply(map_sentiment)
 
 
 
