@@ -330,11 +330,6 @@ for month_year, group in df.groupby('Month-Year'):
     pyLDAvis.save_html(lda_display, filename)
 
 
-#Compute coherence score for tweet data
-coherence_model_lda = CoherenceModel(model=lda, texts=cleaned_sentences, dictionary=dictionary, coherence='c_v')
-coherence_lda = coherence_model_lda.get_coherence()
-print(f'\nCoherence Score for Tweets (Month-Year {month_year}): ', coherence_lda)
-
 
 
 #WEB SCRAPING
@@ -368,7 +363,7 @@ non_twitter_urls = [url for url in urls if "twitter.com" not in url]
 news_sentences = []
 for url in non_twitter_urls:
     try:
-        response = requests.get(url, verify=False)
+        response = requests.get(url)
         soup = BeautifulSoup(response.content, 'html.parser')
         # Extract text based on <p> tags
         paragraphs = [p.get_text() for p in soup.find_all('p')]
@@ -409,10 +404,6 @@ for month_year, group in df.groupby('Month-Year'):
     filename = f'ldaWeb_{month_year}.html'
     pyLDAvis.save_html(lda_display, filename)
 
-# Compute Coherence Score
-coherence_model_lda = CoherenceModel(model=lda, texts=documents, dictionary=dictionary, coherence='c_v')
-coherence_lda = coherence_model_lda.get_coherence()
-print(f'\nCoherence Score for Web Content (Month-Year {month_year}): ', coherence_lda)
 
 
 
@@ -436,7 +427,6 @@ summary_df.to_csv('summary_stats.csv')
 
 #because csv would change ID to scientific notation, the format is changed to xlsx for the output
 df.to_excel('processed_meltwater_report.xlsx',index=False)
-
 
 
 
