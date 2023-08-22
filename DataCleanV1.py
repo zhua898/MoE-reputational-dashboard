@@ -28,7 +28,7 @@ from langdetect.lang_detect_exception import LangDetectException
 
 #ctrl + / = comment
 #pandas default UTF-8 and comma as separator
-df = pd.read_csv('20230724-Meltwater export.csv', encoding='UTF-16', sep='\t')
+df = pd.read_csv('year_data.csv', encoding='UTF-16', sep='\t')
 print(df.columns)
 #print(df['Sentiment'].head(20))
 
@@ -282,7 +282,13 @@ nltk.download('wordnet')
 
 lemmatizer = WordNetLemmatizer()
 #exclude useless words
-excluded_words = {'stated', 'going', 'null'}
+excluded_words = {'stated', 'going', 'null', "said", "would", "also", "one", "education", "school", "children",
+                  "ministry", "sector", "teacher", "teachers", "government", "schools", "kids", "home", "students",
+                  "classes", "parents", "child", "staff", "families", "person", "percent", "work", "rain",
+                  "year", "since", "last", "group", "whether", "asked", "new", "zealand", "say", "search",
+                  "people", "way", "time", "point", "thing", "part", "something", "student", "te", "name", "m", "use"
+            }
+
 stop_words = set(stopwords.words('english')).union(excluded_words)
 
 #tokenize, remove stopwords, lemmatize and filter non-alpha tokens
@@ -306,13 +312,13 @@ corpus = [dictionary.doc2bow(text) for text in [all_tokens]]
 
 #LDA implementation
 num_topics = 3
-lda = LdaModel(corpus, num_topics = num_topics, id2word=dictionary, passes=15)
+lda = LdaModel(corpus, num_topics=num_topics, id2word=dictionary, passes=15)
 
-topics = lda.print_topics(num_words=10)
+topics = lda.print_topics(num_words=60)
 for topic in topics:
     print(topic)
-
-lda_display = gensimvis.prepare(lda, corpus, dictionary, sort_topics=False)
+#display 60 relevant terms
+lda_display = gensimvis.prepare(lda, corpus, dictionary, sort_topics=False, R=60)
 pyLDAvis.display(lda_display)
 pyLDAvis.save_html(lda_display, 'ldaTweet.html')
 
@@ -354,7 +360,12 @@ for news in news_sentences:
 nltk.download('stopwords')
 nltk.download('wordnet')
 lemmatizer = WordNetLemmatizer()
-expanded_stopwords = set(stopwords.words('english')).union({"said", "would", "also", "one"})
+#expand list, 60 threshold
+expanded_stopwords = set(stopwords.words('english')).union({"said", "would", "also", "one", "education", "school", "children", "ministry","sector", "teacher","teachers", "government", "schools",
+                                                            "kids", "home", "students", "classes", "parents", "child", "staff", "families", "children", "person", "percent", "work", "rain",
+                                                            "year", "since", "last", "group", "whether", "asked", "new", "zealand", "say", "search",
+                                                            "people", "way", "time", "point", "thing", "part", "something", "student", "te", "name", "m", "use"
+                                                            })
 
 documents = []
 for sentence in english_news:
@@ -366,10 +377,10 @@ for sentence in english_news:
 dictionary = Dictionary(documents)
 corpus = [dictionary.doc2bow(text) for text in documents]
 lda = LdaModel(corpus, num_topics=3, id2word=dictionary, passes=15)
-topics = lda.print_topics(num_words=10)
+topics = lda.print_topics(num_words=60)
 for topic in topics:
     print(topic)
-lda_display = gensimvis.prepare(lda, corpus, dictionary, sort_topics=False)
+lda_display = gensimvis.prepare(lda, corpus, dictionary, sort_topics=False, R=60)
 pyLDAvis.display(lda_display)
 pyLDAvis.save_html(lda_display, 'ldaWeb.html')
 
