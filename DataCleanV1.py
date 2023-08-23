@@ -26,9 +26,10 @@ from langdetect import detect, lang_detect_exception
 from langdetect.lang_detect_exception import LangDetectException
 from gensim.models import CoherenceModel
 
+
 #ctrl + / = comment
 #pandas default UTF-8 and comma as separator
-df = pd.read_csv('year_data.csv', encoding='UTF-16', sep='\t')
+df = pd.read_csv('20230724-Meltwater export.csv', encoding='UTF-16', sep='\t')
 print(df.columns)
 #print(df['Sentiment'].head(20))
 
@@ -280,6 +281,7 @@ df.loc[:len(counts)-1, 'Count for most common words'] = counts
 nltk.download('stopwords')
 nltk.download('wordnet')
 
+
 df['Date'] = pd.to_datetime(df['Date'], format='%d-%b-%Y %I:%M%p')
 df['Month-Year'] = df['Date'].dt.to_period('M')
 
@@ -319,12 +321,12 @@ for month_year, group in df.groupby('Month-Year'):
     num_topics = 3
     lda = LdaModel(corpus, num_topics=num_topics, id2word=dictionary, passes=15)
 
-    topics = lda.print_topics(num_words=60)
+    topics = lda.print_topics(num_words=30)
     for topic in topics:
         print(f"Month-Year: {month_year}")
         print(topic)
     #display 60 relevant terms
-    lda_display = gensimvis.prepare(lda, corpus, dictionary, sort_topics=False, R=60)
+    lda_display = gensimvis.prepare(lda, corpus, dictionary, sort_topics=False)
     pyLDAvis.display(lda_display)
     filename = f'ldaTweet_{month_year}.html'
     pyLDAvis.save_html(lda_display, filename)
@@ -335,74 +337,70 @@ for month_year, group in df.groupby('Month-Year'):
 #WEB SCRAPING
 #delete tweet website , keep only non tweet and store in new column
 #do web scraping and combine all text data in one column
-#DO LDA
-# URLs
+
 # Tokenization
 nltk.download('stopwords')
 nltk.download('wordnet')
-
-#transform date into python readable format
-df['Date'] = pd.to_datetime(df['Date'], format='%d-%b-%Y %I:%M%p')
-df['Month-Year'] = df['Date'].dt.to_period('M')
-
 lemmatizer = WordNetLemmatizer()
-#expand list, 60 threshold
-expanded_stopwords = set(stopwords.words('english')).union({"said", "would", "also", "one", "education", "school", "children", "ministry","sector", "teacher","teachers", "government", "schools",
-                                                            "kids", "home", "students", "classes", "parents", "child", "staff", "families", "children", "person", "percent", "work", "rain",
-                                                            "year", "since", "last", "group", "whether", "asked", "new", "zealand", "say", "search",
-                                                            "people", "way", "time", "point", "thing", "part", "something", "student", "te", "name", "m", "use",
-                                                            "say", "made"
-                                                            })
+expanded_stopwords = set(stopwords.words('english')).union({'stated', 'going', 'null', "said", "would", "also", "one", "education", "school", "children",
+                  "ministry", "sector", "teacher", "teachers", "government", "schools", "kids", "home", "students",
+                  "classes", "parents", "child", "staff", "families", "person", "percent", "work", "rain",
+                  "year", "since", "last", "group", "whether", "asked", "new", "zealand", "say", "search",
+                  "people", "way", "time", "point", "thing", "part", "something", "student", "te", "name", "m", "use",
+                  "say", "made"})
 
-urls = df['URL'].tolist()
-# Filter out Twitter URLs
-non_twitter_urls = [url for url in urls if "twitter.com" not in url]
+#convert date column to datetime format
+df['Date'] = pd.to_datetime(df['Date'], format="%d-%b-%Y %I:%M%p")
+grouped = df.groupby([df['Date'].dt.year, df['Date'].dt.month])
+all_documents = []
 
-# Web scraping
-#catch errors and pass it
-news_sentences = []
-for url in non_twitter_urls:
-    try:
-        response = requests.get(url)
-        soup = BeautifulSoup(response.content, 'html.parser')
-        # Extract text based on <p> tags
-        paragraphs = [p.get_text() for p in soup.find_all('p')]
-        news_sentences.append(' '.join(paragraphs))
-    except Exception as e:
-        print(f"Error processing URL {url}: {e}")
-        news_sentences.append("")
-df['News_content'] = df['URL'].map(news_sentences)
+for(year, month), group in grouped:
+    print(f"Processing articles from {month}-{year}...")
+    # URLs
+    urls = df['URL'].tolist()
+    # Filter out Twitter URLs
+    non_twitter_urls = [url for url in urls if "twitter.com" not in url]
 
+    # Web scraping
+    news_sentences = []
+    for url in non_twitter_urls:
+        try:
+            response = requests.get(url)
+            soup = BeautifulSoup(response.content, 'html.parser')
+            # Extract text based on <p> tags
+            paragraphs = [p.get_text() for p in soup.find_all('p')]
+            news_sentences.append(' '.join(paragraphs))
+        except Exception as e:
+            print(f"Error processing URL {url}: {e}")
+            news_sentences.append("")
 
-# Filter out non-English content
-def filter_english_content(text):
-    try:
-        if detect(text) == 'en':
-            return text
-        return ""
-    except LangDetectException:
-        return ""
-df['English_News'] = df['News_content'].apply(filter_english_content)
+    # Filter out non-English content
+    english_news = []
+    for news in news_sentences:
+        try:
+            if detect(news) == 'en':
+                english_news.append(news)
+        except LangDetectException:
+            pass
 
-#group by month and apply LDA
-for month_year, group in df.groupby('Month-Year'):
     documents = []
-    for sentence in group['English_News']:
+    for sentence in english_news:
         tokens = [lemmatizer.lemmatize(token) for token in word_tokenize(sentence.lower()) if token not in expanded_stopwords and token.isalpha()]
         # Consider keeping only nouns for better topic clarity (requires POS tagging)
         tokens = [token for token, pos in nltk.pos_tag(tokens) if pos.startswith('NN')]
         documents.append(tokens)
 
-    dictionary = Dictionary(documents)
-    corpus = [dictionary.doc2bow(text) for text in documents]
-    lda = LdaModel(corpus, num_topics=3, id2word=dictionary, passes=15)
-    topics = lda.print_topics(num_words=60)
-    for topic in topics:
-        print(f"Month-Year: {month_year}")
-        print(topic)
-    lda_display = gensimvis.prepare(lda, corpus, dictionary, sort_topics=False, R=60)
-    filename = f'ldaWeb_{month_year}.html'
-    pyLDAvis.save_html(lda_display, filename)
+    all_documents.extend(documents)
+
+dictionary = Dictionary(all_documents)
+corpus = [dictionary.doc2bow(text) for text in all_documents]
+lda = LdaModel(corpus, num_topics=3, id2word=dictionary, passes=15)
+topics = lda.print_topics(num_words=10)
+for topic in topics:
+    print(topic)
+lda_display = gensimvis.prepare(lda, corpus, dictionary, sort_topics=False)
+pyLDAvis.display(lda_display)
+pyLDAvis.save_html(lda_display, 'ldaWeb.html')
 
 
 
