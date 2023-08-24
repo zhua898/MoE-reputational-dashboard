@@ -25,11 +25,11 @@ from nltk.corpus import stopwords
 from langdetect import detect, lang_detect_exception
 from langdetect.lang_detect_exception import LangDetectException
 from gensim.models import CoherenceModel
-
+from concurrent.futures import ThreadPoolExecutor
 
 #ctrl + / = comment
 #pandas default UTF-8 and comma as separator
-df = pd.read_csv('20230724-Meltwater export.csv', encoding='UTF-16', sep='\t')
+df = pd.read_csv('year_data.csv', encoding='UTF-16', sep='\t')
 print(df.columns)
 #print(df['Sentiment'].head(20))
 
@@ -292,7 +292,7 @@ excluded_words = {'stated', 'going', 'null', "said", "would", "also", "one", "ed
                   "classes", "parents", "child", "staff", "families", "person", "percent", "work", "rain",
                   "year", "since", "last", "group", "whether", "asked", "new", "zealand", "say", "search",
                   "people", "way", "time", "point", "thing", "part", "something", "student", "te", "name", "m", "use",
-                  "say", "made"
+                  "say", "made", "month", "day", "moe"
             }
 
 stop_words = set(stopwords.words('english')).union(excluded_words)
@@ -338,6 +338,16 @@ for month_year, group in df.groupby('Month-Year'):
 #delete tweet website , keep only non tweet and store in new column
 #do web scraping and combine all text data in one column
 
+def fetch_content(url):
+    try:
+        response = requests.get(url)
+        soup = BeautifulSoup(response.content, 'html.parser')
+        paragraphs = [p.get_text() for p in soup.find_all('p')]
+        return ' '.join(paragraphs)
+    except Exception as e:
+        print(f"Error processing URL {url}: {e}")
+        return ""
+
 # Tokenization
 nltk.download('stopwords')
 nltk.download('wordnet')
@@ -347,7 +357,8 @@ expanded_stopwords = set(stopwords.words('english')).union({'stated', 'going', '
                   "classes", "parents", "child", "staff", "families", "person", "percent", "work", "rain",
                   "year", "since", "last", "group", "whether", "asked", "new", "zealand", "say", "search",
                   "people", "way", "time", "point", "thing", "part", "something", "student", "te", "name", "m", "use",
-                  "say", "made"})
+                  "say", "made", "month", "day", "moe"
+                                                            })
 
 #convert date column to datetime format
 df['Date'] = pd.to_datetime(df['Date'], format="%d-%b-%Y %I:%M%p")
@@ -355,52 +366,48 @@ grouped = df.groupby([df['Date'].dt.year, df['Date'].dt.month])
 all_documents = []
 
 for(year, month), group in grouped:
-    print(f"Processing articles from {month}-{year}...")
-    # URLs
-    urls = df['URL'].tolist()
-    # Filter out Twitter URLs
-    non_twitter_urls = [url for url in urls if "twitter.com" not in url]
+    try:
+        print(f"Processing articles from {month}-{year}...")
+        # URLs
+        urls = group['URL'].tolist()
+        # Filter out Twitter URLs
+        non_twitter_urls = [url for url in urls if "twitter.com" not in url]
 
-    # Web scraping
-    news_sentences = []
-    for url in non_twitter_urls:
-        try:
-            response = requests.get(url)
-            soup = BeautifulSoup(response.content, 'html.parser')
-            # Extract text based on <p> tags
-            paragraphs = [p.get_text() for p in soup.find_all('p')]
-            news_sentences.append(' '.join(paragraphs))
-        except Exception as e:
-            print(f"Error processing URL {url}: {e}")
-            news_sentences.append("")
+        with ThreadPoolExecutor(max_workers=1000) as executor:
+            news_sentences = list(executor.map(fetch_content, non_twitter_urls))
 
-    # Filter out non-English content
-    english_news = []
-    for news in news_sentences:
-        try:
-            if detect(news) == 'en':
-                english_news.append(news)
-        except LangDetectException:
-            pass
+        # Filter out non-English content
+        english_news = []
+        for news in news_sentences:
+            try:
+                if detect(news) == 'en':
+                    english_news.append(news)
+            except LangDetectException:
+                pass
 
-    documents = []
-    for sentence in english_news:
-        tokens = [lemmatizer.lemmatize(token) for token in word_tokenize(sentence.lower()) if token not in expanded_stopwords and token.isalpha()]
-        # Consider keeping only nouns for better topic clarity (requires POS tagging)
-        tokens = [token for token, pos in nltk.pos_tag(tokens) if pos.startswith('NN')]
-        documents.append(tokens)
+        documents = []
+        for sentence in english_news:
+            tokens = [lemmatizer.lemmatize(token) for token in word_tokenize(sentence.lower()) if token not in expanded_stopwords and token.isalpha()]
+            # Consider keeping only nouns for better topic clarity (requires POS tagging)
+            tokens = [token for token, pos in nltk.pos_tag(tokens) if pos.startswith('NN')]
+            documents.append(tokens)
 
-    all_documents.extend(documents)
+        # Create LDA model for this month
+        dictionary = Dictionary(documents)
+        corpus = [dictionary.doc2bow(text) for text in documents]
+        lda = LdaModel(corpus, num_topics=3, id2word=dictionary, passes=15)
 
-dictionary = Dictionary(all_documents)
-corpus = [dictionary.doc2bow(text) for text in all_documents]
-lda = LdaModel(corpus, num_topics=3, id2word=dictionary, passes=15)
-topics = lda.print_topics(num_words=10)
-for topic in topics:
-    print(topic)
-lda_display = gensimvis.prepare(lda, corpus, dictionary, sort_topics=False)
-pyLDAvis.display(lda_display)
-pyLDAvis.save_html(lda_display, 'ldaWeb.html')
+        topics = lda.print_topics(num_words=10)
+        for topic in topics:
+            print(topic)
+
+        # Generate LDA visualization for this month and save to an HTML file
+        lda_display = gensimvis.prepare(lda, corpus, dictionary, sort_topics=False)
+        html_filename = f'ldaWeb_{year}_{month}.html'
+        pyLDAvis.save_html(lda_display, html_filename)
+
+    except Exception as e:
+        print(f"Error processing data for {month}-{year}: {e}")
 
 
 
