@@ -26,6 +26,9 @@ from langdetect import detect, lang_detect_exception
 from langdetect.lang_detect_exception import LangDetectException
 from gensim.models import CoherenceModel
 from concurrent.futures import ThreadPoolExecutor
+from urllib3.util.retry import Retry
+from requests.adapters import HTTPAdapter
+
 
 #ctrl + / = comment
 #pandas default UTF-8 and comma as separator
@@ -290,9 +293,9 @@ lemmatizer = WordNetLemmatizer()
 excluded_words = {'stated', 'going', 'null', "said", "would", "also", "one", "education", "school", "children",
                   "ministry", "sector", "teacher", "teachers", "government", "schools", "kids", "home", "students",
                   "classes", "parents", "child", "staff", "families", "person", "percent", "work", "rain",
-                  "year", "since", "last", "group", "whether", "asked", "new", "zealand", "say", "search",
+                  "year", "year,", "years.", "since", "last", "group", "whether", "asked", "new", "zealand", "say", "search",
                   "people", "way", "time", "point", "thing", "part", "something", "student", "te", "name", "m", "use",
-                  "say", "made", "month", "day", "moe"
+                  "say", "made", "month", "day", "moe", "years", "years.", "years,"
             }
 
 stop_words = set(stopwords.words('english')).union(excluded_words)
@@ -338,9 +341,16 @@ for month_year, group in df.groupby('Month-Year'):
 #delete tweet website , keep only non tweet and store in new column
 #do web scraping and combine all text data in one column
 
+session = requests.Session()
+retry = Retry(total=3, backoff_factor=0.1, status_forcelist=[500, 502, 503, 504])
+adapter = HTTPAdapter(max_retries=retry)
+session.mount('http://', adapter)
+session.mount('https://', adapter)
+
 def fetch_content(url):
+    print(f"Fetching {url}...")
     try:
-        response = requests.get(url)
+        response = session.get(url, timeout=10)
         soup = BeautifulSoup(response.content, 'html.parser')
         paragraphs = [p.get_text() for p in soup.find_all('p')]
         return ' '.join(paragraphs)
@@ -355,9 +365,9 @@ lemmatizer = WordNetLemmatizer()
 expanded_stopwords = set(stopwords.words('english')).union({'stated', 'going', 'null', "said", "would", "also", "one", "education", "school", "children",
                   "ministry", "sector", "teacher", "teachers", "government", "schools", "kids", "home", "students",
                   "classes", "parents", "child", "staff", "families", "person", "percent", "work", "rain",
-                  "year", "since", "last", "group", "whether", "asked", "new", "zealand", "say", "search",
+                  "year", "year,", "years.", "since", "last", "group", "whether", "asked", "new", "zealand", "say", "search",
                   "people", "way", "time", "point", "thing", "part", "something", "student", "te", "name", "m", "use",
-                  "say", "made", "month", "day", "moe"
+                  "say", "made", "month", "day", "moe", "years", "years.", "years,"
                                                             })
 
 #convert date column to datetime format
