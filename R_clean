@@ -11,19 +11,27 @@ library(tidytext)
 library(dplyr)
 library(readxl)
 library(tidyverse)
+library(tm)
+library(topicmodels)
+library(ggplot2)
+library(LDAvis)
+library(textTinyR)
+library(stm)
+library(proxy)
 
 
 ```
 
 
-
+define the data frame
 ```{r}
-meltwater_1 <- read_excel("processed_meltwater_report.xlsx")
+df <- read_excel("100_result.xlsx")
 
 
 ```
 
 
+Machine learning method
 ```{r}
 get_recoded_sentiment <- function(text, method) {
   sentiment_score <- get_sentiment(text, method = method)
@@ -40,13 +48,13 @@ get_recoded_sentiment <- function(text, method) {
 methods <- c("syuzhet", "bing", "afinn", "nrc")
 
 for (method in methods) {
-  meltwater_1[[paste0(method, "_recode_sentiment")]] <- sapply(meltwater_1$`Hit Sentence`, get_recoded_sentiment, method = method)
+  df[[paste0(method, "_recode_sentiment")]] <- sapply(df$`Hit Sentence`, get_recoded_sentiment, method = method)
 }
 
 #bar charts display
 for (method in methods) {
   print(paste("Counts for method:", method))
-  sentiment_counts <- table(meltwater_1[[paste0(method, "_recode_sentiment")]])
+  sentiment_counts <- table(df[[paste0(method, "_recode_sentiment")]])
   print(as.data.frame(sentiment_counts))
   
   bar_chart <- ggplot(as.data.frame(sentiment_counts), aes(x = Var1, y = Freq)) +
@@ -64,21 +72,98 @@ for (method in methods) {
 
 
 
-```
-
-
-
-
-```{r}
-
-
 
 ```
 
 
 
-
+Coherence models
 ```{r}
+# Create a corpus
+corpus <- Corpus(VectorSource(df$combined_content))
+
+# Preprocess the data
+clean_corpus <- tm_map(corpus, content_transformer(tolower))
+clean_corpus <- tm_map(clean_corpus, removePunctuation)
+clean_corpus <- tm_map(clean_corpus, removeNumbers)
+clean_corpus <- tm_map(clean_corpus, stripWhitespace)
+extended_stopwords <- c(stopwords("en"), "\"", "-", "'s", "also", "like",'"',"'" )
+clean_corpus <- tm_map(clean_corpus, removeWords, extended_stopwords)
+clean_corpus <- tm_map(clean_corpus, stemDocument)
+clean_corpus <- tm_map(clean_corpus, removeWords, "\\b\\w{1,2}\\b")
+
+
+
+
+
+# Create a Document-Term Matrix (DTM)
+dtm <- DocumentTermMatrix(clean_corpus)
+dtm <- dtm[rowSums(as.matrix(dtm)) > 0, ]
+
+
+k <- 3  # Number of topics. Adjust this as per your requirement.
+lda_model <- LDA(dtm, k = k)
+
+# Get top terms for topics
+top_terms <- apply(topics(lda_model, 10), MARGIN = 2, FUN = order, decreasing = TRUE)
+
+# Get term matrix
+terms_matrix <- as.matrix(dtm)
+
+# Compute coherence
+coherence_scores <- numeric(k)
+for (topic in 1:k) {
+    term_pairs <- combn(top_terms[, topic], 2)
+    score <- sum(apply(term_pairs, 2, function(pair) {
+        i <- pair[1]
+        j <- pair[2]
+        Dij <- sum(terms_matrix[, i] & terms_matrix[, j])
+        Di <- sum(terms_matrix[, i])
+        if (Di == 0) return(0)
+        (log1p(Dij) - log(Di)) 
+    }))
+    coherence_scores[topic] <- score
+}
+
+matrix_dtm <- as.matrix(dtm)
+vocab <- colnames(matrix_dtm)
+
+phi <- posterior(lda_model)$terms
+theta <- posterior(lda_model)$topics
+
+print(head(terms_lda))
+
+vis_data <- createJSON(phi = phi, 
+                       theta = theta, 
+                       doc.length = rowSums(matrix_dtm),
+                       vocab = vocab,
+                       term.frequency = colSums(matrix_dtm))
+
+
+
+serVis(vis_data)
+
+
+
+
+
+
+
+
+
+```
+
+
+
+Coherence score
+```{r}
+coherence_df <- data.frame(Topic = 1:k, Coherence = coherence_scores)
+ggplot(coherence_df, aes(x = Topic, y = Coherence)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  labs(title = "Coherence Scores per Topic", x = "Topic", y = "Coherence Score") +
+  theme_minimal()
+
+
 
 
 
