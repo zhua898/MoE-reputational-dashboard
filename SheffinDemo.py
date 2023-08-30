@@ -32,7 +32,7 @@ from requests.adapters import HTTPAdapter
 
 #ctrl + / = comment
 #pandas default UTF-8 and comma as separator
-df = pd.read_csv('100_meltwater.csv', encoding='UTF-16', sep='\t')
+df = pd.read_csv('20230724-Meltwater export.csv', encoding='UTF-16', sep='\t')
 print(df.columns)
 #print(df['Sentiment'].head(20))
 
@@ -427,13 +427,35 @@ for(year, month), group in grouped:
         html_filename = f'ldaWeb_{year}_{month}.html'
         pyLDAvis.save_html(lda_display, html_filename)
 
+
+
     except Exception as e:
         print(f"Error processing data for {month}-{year}: {e}")
 
 
 #add a new column combined_content = tweet content + website content for combined analysis
 #Create 'combined_content' column by replacing 'NULL' in 'Hit Sentence' with the corresponding 'web_content' value
+#null in combined content means the web scraping can not scrap any content
 df['combined_content'] = df.apply(lambda row: row['web_content'] if row['Hit Sentence'] == 'NULL' else row['Hit Sentence'], axis=1)
+df['combined_content'] = df['combined_content'].replace('', 'NULL')
+df['combined_content'] = df['combined_content'].str.lower()
+
+
+# coherence score chart
+#         coherence_model_lda = CoherenceModel(model=lda, texts=documents_with_trigrams, dictionary=dictionary,
+#                                              coherence='c_v')
+#         coherence_lda = coherence_model_lda.get_coherence()
+#         months = list(coherence_scores.keys())
+#         scores = list(coherence_scores.values())
+#         plt.figure(figsize=(15, 7))
+#         plt.plot(months, scores)
+#         plt.xlabel('Month-Year')
+#         plt.ylabel('Coherence Score')
+#         plt.title('Coherence Score over time')
+#         plt.xticks(rotation=45)
+#         plt.grid(True, which='both', linestyle='--', linewidth=0.5)
+#         plt.tight_layout()
+#         plt.show()
 
 
 df.to_excel('100_result.xlsx',index=False)
