@@ -4,7 +4,7 @@ output: html_document
 date: "2023-08-10"
 ---
 
-Initiate libray
+Initiate library
 ```{r}
 library(syuzhet)
 library(tidytext)
@@ -18,6 +18,9 @@ library(LDAvis)
 library(textTinyR)
 library(stm)
 library(proxy)
+library(BTM)
+library(shiny)
+library(tidyr)
 
 
 ```
@@ -77,7 +80,7 @@ for (method in methods) {
 
 
 
-Coherence models
+Coherence models for both web and tweet data
 ```{r}
 # Create a corpus
 corpus <- Corpus(VectorSource(df$combined_content))
@@ -101,7 +104,7 @@ dtm <- DocumentTermMatrix(clean_corpus)
 dtm <- dtm[rowSums(as.matrix(dtm)) > 0, ]
 
 
-k <- 3  # Number of topics. Adjust this as per your requirement.
+k <- 10  # Number of topics. Adjust this as per your requirement.
 lda_model <- LDA(dtm, k = k)
 
 # Get top terms for topics
@@ -155,7 +158,7 @@ serVis(vis_data)
 
 
 
-Coherence score
+Coherence score for both web and tweet data.
 ```{r}
 coherence_df <- data.frame(Topic = 1:k, Coherence = coherence_scores)
 ggplot(coherence_df, aes(x = Topic, y = Coherence)) +
@@ -171,7 +174,58 @@ ggplot(coherence_df, aes(x = Topic, y = Coherence)) +
 
 
 
+
+BTM model for tweet data (suitable for short text)
 ```{r}
+# Define stop words and add custom ones
+stop_words <- stopwords("en")
+custom_stop_words <- c("on", "the", "and", "is", "of", "ministry", "since", "NULL"
+                       ,"&", "nz", " ")
+stop_words <- union(stop_words, custom_stop_words)
+
+generate_biterms <- function(tokenized_sentence) {
+  biterms_list <- list()
+  
+  # For every word in the sentence
+  for (i in 1:(length(tokenized_sentence) - 1)) {
+    for (j in (i + 1):length(tokenized_sentence)) {
+      biterm <- sort(c(tokenized_sentence[i], tokenized_sentence[j]))
+      biterms_list <- c(biterms_list, list(biterm))
+    }
+  }
+  
+  return(biterms_list)
+}
+
+# Tokenize sentences and remove stop words
+word_list <- lapply(df$`Hit Sentence`, function(sentence){
+  words <- unlist(strsplit(as.character(sentence), " "))
+  cleaned_words <- words[!tolower(words) %in% stop_words]
+  return(cleaned_words)
+})
+
+# Generate biterms
+biterms <- unlist(lapply(word_list, generate_biterms), recursive = FALSE)
+
+biterm_freq <- table(unlist(lapply(biterms, paste0, collapse=" & ")))
+
+# Top 20 biterms
+top_biterms <- head(sort(biterm_freq, decreasing = TRUE), 60)
+
+# Plot
+top_biterms_df <- as.data.frame(top_biterms)
+colnames(top_biterms_df) <- c("Biterms", "Freq")
+plot <- ggplot(top_biterms_df, aes(x = Biterms, y = Freq)) + 
+  geom_bar(stat = "identity") + 
+  coord_flip() + 
+  labs(title = "Top 60 Biterms", x = "Biterms", y = "Frequency") + 
+  theme(axis.text.y = element_text(size = 8))  # Reduce the font size for y-axis text
+
+print(plot)
+ggsave("biterms_plot.png", plot, width = 10, height = 10)
+
+
+
 
 
 
@@ -179,8 +233,57 @@ ggplot(coherence_df, aes(x = Topic, y = Coherence)) +
 
 
 
-
+Demo interactive dashboard using shiny
 ```{r}
+
+ui <- fluidPage(
+  titlePanel("State-City Visualization"),
+  
+  mainPanel(
+    plotOutput("stateCityPlot"),
+    verbatimTextOutput("errorText")
+  )
+)
+
+# Shiny Server
+server <- function(input, output) {
+
+  plot_or_error <- reactiveVal(list(type = "plot", content = NULL))
+
+  observe({
+    result <- try({
+      p <- ggplot(df, aes(x = State, fill = City)) +
+        geom_bar(position = "dodge") + 
+        theme_minimal() +
+        labs(title = "Count of Cities by State", x = "State", y = "Count")
+      list(type = "plot", content = p)
+    }, silent = TRUE)
+    
+    if(inherits(result, "try-error")) {
+      plot_or_error(list(type = "error", content = as.character(result)))
+    } else {
+      plot_or_error(result)
+    }
+  })
+
+  output$stateCityPlot <- renderPlot({
+    if(plot_or_error()$type == "plot") {
+      print(plot_or_error()$content)
+    }
+  })
+
+  output$errorText <- renderText({
+    if(plot_or_error()$type == "error") {
+      return(plot_or_error()$content)
+    }
+  })
+}
+
+# Run the application 
+shinyApp(ui = ui, server = server)
+
+
+
 
 
 
