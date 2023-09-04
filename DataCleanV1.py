@@ -14,7 +14,7 @@ import openpyxl
 import nltk
 from gensim import corpora
 from gensim.models import LdaModel, Phrases
-from nltk.stem import  WordNetLemmatizer
+from nltk.stem import WordNetLemmatizer
 import pyLDAvis.gensim_models as gensimvis
 import pyLDAvis
 import requests
@@ -32,7 +32,7 @@ from requests.adapters import HTTPAdapter
 
 #ctrl + / = comment
 #pandas default UTF-8 and comma as separator
-df = pd.read_csv('year_data.csv', encoding='UTF-16', sep='\t')
+df = pd.read_csv('20230724-Meltwater export.csv', encoding='UTF-16', sep='\t')
 print(df.columns)
 #print(df['Sentiment'].head(20))
 
@@ -89,7 +89,9 @@ df['URL'] = df['URL'].fillna('NULL')
 df['User Profile Url'] = df['User Profile Url'].fillna('NULL')
 print(df['User Profile Url'].head(10))
 
-
+#use regex tp replace youtube links in the hit sentence column with NULL
+pattern = r'https?://(www\.)?youtube(\.com|\.be)/'
+df.loc[df['URL'].str.contains(pattern, na=False, regex=True), 'Hit Sentence'] = "NULL"
 
 
 #Sheffin
@@ -289,6 +291,9 @@ df['Date'] = pd.to_datetime(df['Date'], format='%d-%b-%Y %I:%M%p')
 df['Month-Year'] = df['Date'].dt.to_period('M')
 
 lemmatizer = WordNetLemmatizer()
+#stemming method
+#stemmer = PorterStemmer()
+#[lemmatizer.lemmatize(stemmer.stem(token)) for token in sentence if token not in stop_words and token.isalpha() and len(token) > 2]
 #exclude useless words
 excluded_words = {'stated', 'going', 'null', "said", "would", "also", "one", "education", "school", "children",
                   "ministry", "sector", "teacher", "teachers", "government", "schools", "kids", "home", "students",
@@ -308,6 +313,7 @@ for month_year, group in df.groupby('Month-Year'):
         for sentence in sentences
     ]
 
+    #8/25 change
     #list possible combination of 2/3 common words
     bigram_model = Phrases(cleaned_sentences, min_count=5, threshold=100)
     trigram_model = Phrases(bigram_model[cleaned_sentences], threshold=100)
@@ -338,6 +344,10 @@ for month_year, group in df.groupby('Month-Year'):
 
 
 #WEB SCRAPING
+
+#initialize stemmer
+stemmer = PorterStemmer()
+
 #delete tweet website , keep only non tweet and store in new column
 #do web scraping and combine all text data in one column
 
@@ -397,14 +407,23 @@ for(year, month), group in grouped:
 
         documents = []
         for sentence in english_news:
+            #Lemmatization
             tokens = [lemmatizer.lemmatize(token) for token in word_tokenize(sentence.lower()) if token not in expanded_stopwords and token.isalpha()]
+            #Stemming
+            #tokens = [stemmer.stem(token) for token in word_tokenize(sentence.lower()) if token not in expanded_stopwords and token.isalpha()]
             # Consider keeping only nouns for better topic clarity (requires POS tagging)
             tokens = [token for token, pos in nltk.pos_tag(tokens) if pos.startswith('NN')]
             documents.append(tokens)
 
+        #Combine possible words using bigrams and trigrams
+        bigram_model_website = Phrases(documents, min_count=5, threshold=100)
+        trigram_model_website = Phrases(bigram_model_website[documents], threshold=100)
+        documents_with_bigrams = [bigram_model_website[doc] for doc in documents]
+        documents_with_trigrams = [trigram_model_website[bigram_model_website[doc]] for doc in documents_with_bigrams]
+
         # Create LDA model for this month
-        dictionary = Dictionary(documents)
-        corpus = [dictionary.doc2bow(text) for text in documents]
+        dictionary = Dictionary(documents_with_trigrams)
+        corpus = [dictionary.doc2bow(text) for text in documents_with_trigrams]
         lda = LdaModel(corpus, num_topics=3, id2word=dictionary, passes=15)
 
         topics = lda.print_topics(num_words=10)
@@ -418,6 +437,15 @@ for(year, month), group in grouped:
 
     except Exception as e:
         print(f"Error processing data for {month}-{year}: {e}")
+
+
+#add a new column combined_content = tweet content + website content for combined analysis
+#Create 'combined_content' column by replacing 'NULL' in 'Hit Sentence' with the corresponding 'web_content' value
+#null in combined content means the web scraping can not scrap any content
+# df['combined_content'] = df.apply(lambda row: row['web_content'] if row['Hit Sentence'] == 'NULL' else row['Hit Sentence'], axis=1)
+# df['combined_content'] = df['combined_content'].replace('', 'NULL')
+# df['combined_content'] = df['combined_content'].str.lower()
+
 
 
 
