@@ -236,52 +236,116 @@ ggsave("biterms_plot.png", plot, width = 10, height = 10)
 Demo interactive dashboard using shiny
 ```{r}
 
+# Shiny User Interface
 ui <- fluidPage(
-  titlePanel("State-City Visualization"),
+  titlePanel("MoE Reputational Dashboard"),
   
   mainPanel(
-    plotOutput("stateCityPlot"),
-    verbatimTextOutput("errorText")
+    tabsetPanel(
+      tabPanel("Top 10 Cities by Count", plotOutput("cityPlot", width = "100%", height = "500px")),
+      tabPanel("Most Common Words Count", plotOutput("wordPlot", width = "100%", height = "700px")),
+      tabPanel("Twitter Count", plotOutput("twitterPlot", width = "100%", height = "500px")),
+      tabPanel("Top 10 Twitter Followers", plotOutput("followersPlot", width = "100%", height = "500px")),
+      verbatimTextOutput("errorText")
+    )
   )
 )
 
 # Shiny Server
 server <- function(input, output) {
 
-  plot_or_error <- reactiveVal(list(type = "plot", content = NULL))
-
+  # Top 10 Cities Plot
   observe({
     result <- try({
-      p <- ggplot(df, aes(x = State, fill = City)) +
-        geom_bar(position = "dodge") + 
+      top_cities <- df %>%
+        group_by(City) %>%
+        summarise(Count = n()) %>%
+        ungroup() %>%
+        top_n(10, Count)
+      
+      p <- ggplot(top_cities, aes(x = reorder(City, -Count), y = Count)) +
+        geom_bar(stat = "identity") +
+        geom_text(aes(label = Count), vjust = -0.5) + 
         theme_minimal() +
-        labs(title = "Count of Cities by State", x = "State", y = "Count")
-      list(type = "plot", content = p)
+        labs(title = "Top 10 Cities by Count", x = "City", y = "Count")
+      
+      output$cityPlot <- renderPlot({ print(p) })
     }, silent = TRUE)
     
     if(inherits(result, "try-error")) {
-      plot_or_error(list(type = "error", content = as.character(result)))
-    } else {
-      plot_or_error(result)
+      output$errorText <- renderText({ as.character(result) })
     }
   })
 
-  output$stateCityPlot <- renderPlot({
-    if(plot_or_error()$type == "plot") {
-      print(plot_or_error()$content)
+  # Most Common Words Plot
+  observe({
+    result <- try({
+      p <- ggplot(df, aes(x = reorder(`Most Common Words`, -`Count for most common words`), y = `Count for most common words`)) +
+        geom_bar(stat = "identity") +
+        aes(label = `Count for most common words`) +
+        theme_minimal() +
+        labs(title = "Most Common Words Count", x = "Word", y = "Count") +
+        coord_flip()
+      
+      output$wordPlot <- renderPlot({ print(p) })
+    }, silent = TRUE)
+    
+    if(inherits(result, "try-error")) {
+      output$errorText <- renderText({ as.character(result) })
     }
   })
 
-  output$errorText <- renderText({
-    if(plot_or_error()$type == "error") {
-      return(plot_or_error()$content)
+  # Twitter Count Plot
+  observe({
+    result <- try({
+      twitter_counts <- df %>%
+        group_by(is_twitter) %>%
+        summarise(Count = n()) %>%
+        ungroup()
+      
+      p <- ggplot(twitter_counts, aes(x = as.factor(is_twitter), y = Count)) +
+        geom_bar(stat = "identity") +
+        geom_text(aes(label = Count), vjust = -0.5) +
+        theme_minimal() +
+        labs(title = "Twitter Source Count", x = "Is Twitter", y = "Count")
+      
+      output$twitterPlot <- renderPlot({ print(p) })
+    }, silent = TRUE)
+    
+    if(inherits(result, "try-error")) {
+      output$errorText <- renderText({ as.character(result) })
     }
   })
+  
+  # Top 10 Twitter Followers Plot
+  observe({
+  result <- try({
+    # Get top 10 unique tweet_ids based on Twitter Followers count
+    top_followers <- df %>%
+      arrange(desc(`Twitter Followers`)) %>%
+      select(`Twitter Followers`, `Tweet Id`) %>%
+      distinct(`Tweet Id`, .keep_all = TRUE) %>%
+      head(10)
+    
+    p <- ggplot(top_followers, aes(x = as.factor(`Tweet Id`), y = `Twitter Followers`)) +
+      geom_bar(stat = "identity") +
+      geom_text(aes(label = `Twitter Followers`), vjust = -0.5) +
+      theme_minimal() +
+      labs(title = "Top 10 Twitter Followers by Tweet Id", x = "Tweet Id", y = "Followers Count") +
+      coord_flip()
+    
+    output$followersPlot <- renderPlot({ print(p) })
+  }, silent = TRUE)
+  
+  if(inherits(result, "try-error")) {
+    output$errorText <- renderText({ as.character(result) })
+  }
+})
+  
 }
 
 # Run the application 
 shinyApp(ui = ui, server = server)
-
 
 
 
