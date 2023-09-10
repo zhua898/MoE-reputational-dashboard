@@ -32,7 +32,7 @@ from requests.adapters import HTTPAdapter
 
 #ctrl + / = comment
 #pandas default UTF-8 and comma as separator
-df = pd.read_csv('20230724-Meltwater export.csv', encoding='UTF-16', sep='\t')
+df = pd.read_csv('year_data.csv', encoding='UTF-16', sep='\t')
 print(df.columns)
 #print(df['Sentiment'].head(20))
 
@@ -467,16 +467,73 @@ summary_df.to_csv('summary_stats.csv')
 
 
 
-
 #because csv would change ID to scientific notation, the format is changed to xlsx for the output
 df.to_excel('processed_meltwater_report.xlsx',index=False)
 
 
 
 
+# Define the data
+import pandas as pd
+
+years = ["2017", "2018", "2019", "2020", "2021", "2022", "2023"]
+
+reputation_score = {
+    "Ministry of Education": [54, 55, 58, 64, 65, 61, 58],
+    "Public sector average": [60, 61, 62, 66, 66, 63, 62]
+}
+
+pillars = {
+    "Trust": [53, 54, 56, 63, 64, 61, 58],
+    "Social Responsibility": [57, 58, 60, 66, 66, 62, 58],
+    "Leadership": [54, 55, 59, 64, 64, 60, 57],
+    "Fairness": [54, 54, 57, 64, 66, 61, 58]
+}
+
+statements = {
+    "Is trustworthy": [27, 29, 33, 44, 49, 43, 36],
+    "Can be relied upon to protect individuals' personal information": [28, 27, 34, 38, 46, 41, 30],
+    "Uses taxpayer money responsibly": [23, 27, 31, 39, 45, 36, 32],
+    "Listens to the public's point of view": [22, 22, 30, 35, 41, 33, 26],
+    "Has the best of intentions": ["NULL", "NULL", "NULL", "NULL", "NULL", "NULL", "NULL"],
+    "Is a postivie influence on society": [32, 39, 42, 57, 53, 52, 41],
+    "Behaves in a responsible way towards the environment": [26, 27, 30, 41, 43, 39, 30],
+    "Has a postiive impact on people's mental and physical wellbeing": ["NULL", "NULL", 38, 47, 49, 45, 31],
+    "Contributes to economoic growth": [32, 31, 38, 45, 52, 47, 35],
+    "Is easy to deal with in a digital environment": [23, 23, 28, 35, 43, 33, 24],
+    "Is a successful and well-run organisation": ["NULL", "NULL", "NULL", 41, 41, 41, 29],
+    "Is a forward looking organisation": [30, 30, 37, 49, 47, 43, 35],
+    "Deals fairly with people regardless of their background or role": [29, 28, 38, 37, 47, 45, 34],
+    "Works positively with Māori": ["NULL", "NULL", "NULL", 44, 48, 45, 34],
+    "Treats their employees well": [19, 19, 24, 35, 37, 29, 20],
+    "Works positively with Pacific peoples": ["NULL", "NULL", "NULL", 35, 46, 39, 32]
+}
 
 
+# Rearrange data
+rearranged_data = []
 
+for year_idx, year in enumerate(years):
+    year_data = {"Year": year}
+
+    for category, scores in reputation_score.items():
+        year_data[category] = scores[year_idx]
+
+    for pillar, scores in pillars.items():
+        year_data[pillar] = scores[year_idx]
+
+    for statement, responses in statements.items():
+        try:
+            year_data[statement] = responses[year_idx]
+        except IndexError:
+            year_data[statement] = None
+
+    rearranged_data.append(year_data)
+
+new_df = pd.DataFrame(rearranged_data)
+existing_df = pd.read_excel("processed_meltwater_report.xlsx", engine='openpyxl')
+combine_df = pd.concat([existing_df, new_df], axis=1)
+combine_df.to_excel("processed_meltwater_report.xlsx", index=False, engine='openpyxl')
 
 
 
