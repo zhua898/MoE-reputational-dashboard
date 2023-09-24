@@ -448,9 +448,23 @@ df['combined_content'] = df['combined_content'].replace('', 'NULL')
 df['combined_content'] = df['combined_content'].str.lower()
 
 
+#scheme classification for
+THRESHOLD = 0.1
 
 def classify_texts(batch_texts, categories):
-    return classifier(batch_texts, categories)
+    results = classifier(batch_texts, categories)
+    best_categories = []
+    for result in results:
+        best_label = result['labels'][0]
+        best_score = result['scores'][0]
+
+        if best_score >= THRESHOLD:
+            best_categories.append(best_label)
+        else:
+            best_categories.append("Uncategorized")
+
+    return best_categories
+
 
 if torch.cuda.is_available():
     device = 0  # to run on the first GPU
@@ -464,10 +478,12 @@ classifier = pipeline("zero-shot-classification", device=device)
 
 # Define sub-categories
 categories = [
-    "Racism", "Maori Achieving as Maori", "Pacific Education", "Teachers Supporting Maori Education",
+    "Racism", "Maori Achieving as Maori", "Pacific Education", "Teachers Backing Maori Education",
     "Engagement", "Academic Performance", "Attendance", "Truancy",
     "Teacher Supply", "Teacher Pay", "Pay Equity", "Educator Wellbeing",
     "Mental Health", "Bullying", "Pastoral Care", "Learner Safety", "School Lunches", "Learning Support"
+    "assessment", "curriculum refresh", "NZ cirriculum", "Te Marautanga", "NCEA"
+    "Tomorrow", "Te Mahau", "redesigned Ministry"
 ]
 
 # Convert DataFrame column to list
