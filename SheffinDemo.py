@@ -36,7 +36,7 @@ from transformers import pipeline
 
 #ctrl + / = comment
 #pandas default UTF-8 and comma as separator
-df = pd.read_csv('20230724-Meltwater export.csv', encoding='UTF-16', sep='\t')
+df = pd.read_csv('year_data.csv', encoding='UTF-16', sep='\t')
 print(df.columns)
 #print(df['Sentiment'].head(20))
 
@@ -483,7 +483,9 @@ categories = [
     "Teacher Supply", "Teacher Pay", "Pay Equity", "Educator Wellbeing",
     "Mental Health", "Bullying", "Pastoral Care", "Learner Safety", "School Lunches", "Learning Support"
     "assessment", "curriculum refresh", "NZ cirriculum", "Te Marautanga", "NCEA"
-    "Tomorrow", "Te Mahau", "redesigned Ministry"
+    "Tomorrow", "Te Mahau", "redesigned Ministry",
+    "Attendance"
+
 ]
 
 # Convert DataFrame column to list
@@ -535,7 +537,7 @@ df['Sub-Category'] = best_categories
 #         plt.show()
 
 
-df.to_excel('800_result.xlsx',index=False)
+df.to_excel('year_data_result.xlsx',index=False)
 
 
 
