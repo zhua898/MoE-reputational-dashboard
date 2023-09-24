@@ -462,8 +462,13 @@ else:
 # Initialize zero-shot classification pipeline with device
 classifier = pipeline("zero-shot-classification", device=device)
 
-# Define categories
-categories = ["Equity", "Achievement", "Workforce", "Wellbeing", "Curriculum", "Te Mahau", "Attendance"]
+# Define sub-categories
+categories = [
+    "Racism", "Maori Achieving as Maori", "Pacific Education", "Teachers Supporting Maori Education",
+    "Engagement", "Academic Performance", "Attendance", "Truancy",
+    "Teacher Supply", "Teacher Pay", "Pay Equity", "Educator Wellbeing",
+    "Mental Health", "Bullying", "Pastoral Care", "Learner Safety", "School Lunches", "Learning Support"
+]
 
 # Convert DataFrame column to list
 texts = df['combined_content'].tolist()
@@ -484,12 +489,10 @@ with concurrent.futures.ThreadPoolExecutor(max_workers=1000) as executor:
     # Collect results as they become available
     for future in concurrent.futures.as_completed(futures):
         results = future.result()
-        for result in results:
-            best_category = result['labels'][0]
-            best_categories.append(best_category)
+        best_categories.extend(results)
 
 # Add to DataFrame
-df['Category'] = best_categories
+df['Sub-Category'] = best_categories
 
 
 
