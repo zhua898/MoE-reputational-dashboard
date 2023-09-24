@@ -28,6 +28,7 @@ from gensim.models import CoherenceModel
 from concurrent.futures import ThreadPoolExecutor
 from urllib3.util.retry import Retry
 from requests.adapters import HTTPAdapter
+from collections import defaultdict
 
 
 #ctrl + / = comment
@@ -207,7 +208,7 @@ plt.title('Sentiment Analysis')
 plt.xlabel('Sentiment')
 plt.ylabel('Frequency')
 plt.annotate(f'Mean: {mean_sentiment:.5f}', xy=(0.05, 0.85), xycoords='axes fraction')
-plt.show()
+#plt.show()
 
 
 
@@ -247,7 +248,7 @@ plt.tight_layout()
 for bar in bars:
     yval = bar.get_height()
     plt.text(bar.get_x() + bar.get_width()/2, yval + 20, round(yval, 2), ha='center', va='bottom')
-plt.show()
+#plt.show()
 
 
 
@@ -260,7 +261,7 @@ plt.figure(figsize=(10,6))
 plt.imshow(wordcloud, interpolation='bilinear')
 plt.axis('off')
 plt.title("Most Used Words/Topics in Hit Sentence")
-plt.show()
+#plt.show()
 
 #generate a new column which list the most mentioned words and its count
 def tokenize(sentence):
@@ -286,6 +287,11 @@ df.loc[:len(counts)-1, 'Count for most common words'] = counts
 nltk.download('stopwords')
 nltk.download('wordnet')
 
+#9/12 add lda top keywords to columns
+tf_dict = {}
+keywords_dict = {}
+frequency_dict = {}
+rows = []
 
 df['Date'] = pd.to_datetime(df['Date'], format='%d-%b-%Y %I:%M%p')
 df['Month-Year'] = df['Date'].dt.to_period('M')
@@ -322,6 +328,26 @@ for month_year, group in df.groupby('Month-Year'):
 
     #flatten list of sentences for LDA
     all_tokens = [token for sentence in tokens_with_trigrams for token in sentence]
+
+    # Calculate term frequency for this month-year and store in the dictionary
+    tf_dict[month_year] = Counter(all_tokens)
+
+    # Get top 30 keywords for this month-year
+    keywords_dict[month_year] = [keyword for keyword, freq in tf_dict[month_year].most_common(30)]
+
+    # Get frequencies for the top 30 keywords
+    top_30_keywords = [keyword for keyword, freq in tf_dict[month_year].most_common(30)]
+    top_30_frequencies = [str(tf_dict[month_year][keyword]) for keyword in top_30_keywords]
+
+    for keyword, frequency in zip(top_30_keywords, top_30_frequencies):
+        rows.append({'Month-Year': str(month_year), 'Keyword': keyword, 'Frequency': frequency})
+
+    # Create the new dataframe
+    keywords_df = pd.DataFrame(rows)
+    df['Month-Year'] = df['Month-Year'].astype(str)
+    keywords_df['Month-Year'] = keywords_df['Month-Year'].astype(str)
+
+
     #corpus for LDA
     dictionary = corpora.Dictionary([all_tokens])
     corpus = [dictionary.doc2bow(text) for text in [all_tokens]]
@@ -331,14 +357,25 @@ for month_year, group in df.groupby('Month-Year'):
     lda = LdaModel(corpus, num_topics=num_topics, id2word=dictionary, passes=15)
 
     topics = lda.print_topics(num_words=30)
+    month_keywords = []
     for topic in topics:
+        _, words = topic
+        keywords = ' '.join(word.split('*')[1].replace('"', '').strip() for word in words.split('+'))
+        month_keywords.append(keywords)  # Accumulate keywords for this topic
         print(f"Month-Year: {month_year}")
         print(topic)
-    #display 60 relevant terms
+
+
+    #display relevant terms
     lda_display = gensimvis.prepare(lda, corpus, dictionary, sort_topics=False)
     pyLDAvis.display(lda_display)
     filename = f'ldaTweet_{month_year}.html'
     pyLDAvis.save_html(lda_display, filename)
+
+
+    lda_df = pd.DataFrame(rows)
+    lda_df.to_excel("Tweet_LDA_output.xlsx", index=False)
+
 
 
 
@@ -385,6 +422,8 @@ df['Date'] = pd.to_datetime(df['Date'], format="%d-%b-%Y %I:%M%p")
 grouped = df.groupby([df['Date'].dt.year, df['Date'].dt.month])
 all_documents = []
 
+
+all_rows = []
 for(year, month), group in grouped:
     try:
         print(f"Processing articles from {month}-{year}...")
@@ -393,6 +432,7 @@ for(year, month), group in grouped:
         # Filter out Twitter URLs
         non_twitter_urls = [url for url in urls if "twitter.com" not in url]
 
+        #Important: max_workers significantly affect the speed of web scraping
         with ThreadPoolExecutor(max_workers=1000) as executor:
             news_sentences = list(executor.map(fetch_content, non_twitter_urls))
 
@@ -422,12 +462,27 @@ for(year, month), group in grouped:
         documents_with_trigrams = [trigram_model_website[bigram_model_website[doc]] for doc in documents_with_bigrams]
 
         # Create LDA model for this month
+        # dictioary to store raw term frequencies across all documents
+        term_frequencies = defaultdict(int)
+        for document in documents_with_trigrams:
+            for term in document:
+                term_frequencies[term] += 1
         dictionary = Dictionary(documents_with_trigrams)
         corpus = [dictionary.doc2bow(text) for text in documents_with_trigrams]
         lda = LdaModel(corpus, num_topics=3, id2word=dictionary, passes=15)
 
         topics = lda.print_topics(num_words=10)
-        for topic in topics:
+        for topic_num, topic in topics:
+            pairs = topic.split('+')
+            for pair in pairs:
+                weight, word = pair.split('*')
+                word = word.replace('"', '').strip()
+                all_rows.append({
+                    'Month-Year': f"{month}-{year}",
+                    'Keyword': word,
+                    'Weight': float(weight),
+                    'Raw Frequency': term_frequencies[word]
+                })
             print(topic)
 
         # Generate LDA visualization for this month and save to an HTML file
@@ -438,6 +493,9 @@ for(year, month), group in grouped:
     except Exception as e:
         print(f"Error processing data for {month}-{year}: {e}")
 
+#saving web scraping content to excel
+keywords_df = pd.DataFrame(all_rows)
+keywords_df.to_excel("web_LDA_output.xlsx", index=False)
 
 #add a new column combined_content = tweet content + website content for combined analysis
 #Create 'combined_content' column by replacing 'NULL' in 'Hit Sentence' with the corresponding 'web_content' value
@@ -467,15 +525,20 @@ summary_df.to_csv('summary_stats.csv')
 
 
 
+
+
 #because csv would change ID to scientific notation, the format is changed to xlsx for the output
-df.to_excel('processed_meltwater_report.xlsx',index=False)
+df.to_excel('test_0920.xlsx',index=False)
+
+
+
+
+
 
 
 
 
 # Define the data
-import pandas as pd
-
 years = ["2017", "2018", "2019", "2020", "2021", "2022", "2023"]
 
 reputation_score = {
@@ -534,6 +597,20 @@ new_df = pd.DataFrame(rearranged_data)
 existing_df = pd.read_excel("processed_meltwater_report.xlsx", engine='openpyxl')
 combine_df = pd.concat([existing_df, new_df], axis=1)
 combine_df.to_excel("processed_meltwater_report.xlsx", index=False, engine='openpyxl')
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
