@@ -18,6 +18,8 @@ from nltk.stem import  WordNetLemmatizer
 import pyLDAvis.gensim_models as gensimvis
 import pyLDAvis
 import requests
+import torch
+import concurrent.futures
 from bs4 import BeautifulSoup
 from gensim.corpora import Dictionary
 from nltk.tokenize import word_tokenize
@@ -28,6 +30,8 @@ from gensim.models import CoherenceModel
 from concurrent.futures import ThreadPoolExecutor
 from urllib3.util.retry import Retry
 from requests.adapters import HTTPAdapter
+from transformers import pipeline
+
 
 
 #ctrl + / = comment
@@ -90,6 +94,9 @@ df['User Profile Url'] = df['User Profile Url'].fillna('NULL')
 print(df['User Profile Url'].head(10))
 
 
+#use regex tp replace youtube links in the hit sentence column with NULL
+pattern = r'https?://(www\.)?youtube(\.com|\.be)/'
+df.loc[df['URL'].str.contains(pattern, na=False, regex=True), 'Hit Sentence'] = "NULL"
 
 
 #Sheffin
@@ -205,7 +212,7 @@ plt.title('Sentiment Analysis')
 plt.xlabel('Sentiment')
 plt.ylabel('Frequency')
 plt.annotate(f'Mean: {mean_sentiment:.5f}', xy=(0.05, 0.85), xycoords='axes fraction')
-plt.show()
+#plt.show()
 
 
 
@@ -245,7 +252,7 @@ plt.tight_layout()
 for bar in bars:
     yval = bar.get_height()
     plt.text(bar.get_x() + bar.get_width()/2, yval + 20, round(yval, 2), ha='center', va='bottom')
-plt.show()
+#plt.show()
 
 
 
@@ -258,7 +265,7 @@ plt.figure(figsize=(10,6))
 plt.imshow(wordcloud, interpolation='bilinear')
 plt.axis('off')
 plt.title("Most Used Words/Topics in Hit Sentence")
-plt.show()
+#plt.show()
 
 #generate a new column which list the most mentioned words and its count
 def tokenize(sentence):
@@ -441,6 +448,57 @@ df['combined_content'] = df['combined_content'].replace('', 'NULL')
 df['combined_content'] = df['combined_content'].str.lower()
 
 
+
+def classify_texts(batch_texts, categories):
+    return classifier(batch_texts, categories)
+
+if torch.cuda.is_available():
+    device = 0  # to run on the first GPU
+    print(f'Using GPU: {torch.cuda.get_device_name(0)}')
+else:
+    device = -1  # to run on CPU
+    print("Using CPU")
+
+# Initialize zero-shot classification pipeline with device
+classifier = pipeline("zero-shot-classification", device=device)
+
+# Define categories
+categories = ["Equity", "Achievement", "Workforce", "Wellbeing", "Curriculum", "Te Mahau", "Attendance"]
+
+# Convert DataFrame column to list
+texts = df['combined_content'].tolist()
+
+# Define batch size; you might need to adjust this based on your system's memory
+batch_size = 100
+
+# Initialize list to store results
+best_categories = []
+
+# Create batches
+batches = [texts[i:i + batch_size] for i in range(0, len(texts), batch_size)]
+
+# Parallelize using ThreadPoolExecutor
+with concurrent.futures.ThreadPoolExecutor(max_workers=1000) as executor:
+    futures = [executor.submit(classify_texts, batch, categories) for batch in batches]
+
+    # Collect results as they become available
+    for future in concurrent.futures.as_completed(futures):
+        results = future.result()
+        for result in results:
+            best_category = result['labels'][0]
+            best_categories.append(best_category)
+
+# Add to DataFrame
+df['Category'] = best_categories
+
+
+
+
+
+
+
+
+
 # coherence score chart
 #         coherence_model_lda = CoherenceModel(model=lda, texts=documents_with_trigrams, dictionary=dictionary,
 #                                              coherence='c_v')
@@ -458,7 +516,7 @@ df['combined_content'] = df['combined_content'].str.lower()
 #         plt.show()
 
 
-df.to_excel('100_result.xlsx',index=False)
+df.to_excel('800_result.xlsx',index=False)
 
 
 
