@@ -33,14 +33,16 @@ from collections import defaultdict
 
 #ctrl + / = comment
 #pandas default UTF-8 and comma as separator
-df = pd.read_csv('year_data.csv', encoding='UTF-16', sep='\t')
+df = pd.read_csv('Sentiment reset - 1 Jan - 19 Sept 2022.csv', encoding='UTF-16', sep='\t')
 print(df.columns)
 #print(df['Sentiment'].head(20))
 
 #lowercase all content in the report
 for col in df.columns:
     if df[col].dtype == 'object':
-        df[col] = df[col].str.lower()
+        #only lowercase the rows where the content is a string
+        mask = df[col].apply(type) == str
+        df.loc[mask, col] = df.loc[mask, col].str.lower()
 print(df.head(10))
 
 
@@ -306,7 +308,8 @@ excluded_words = {'stated', 'going', 'null', "said", "would", "also", "one", "ed
                   "classes", "parents", "child", "staff", "families", "person", "percent", "work", "rain",
                   "year", "year,", "years.", "since", "last", "group", "whether", "asked", "new", "zealand", "say", "search",
                   "people", "way", "time", "point", "thing", "part", "something", "student", "te", "name", "m", "use",
-                  "say", "made", "month", "day", "moe", "years", "years.", "years,"
+                  "say", "made", "month", "day", "moe", "years", "years.", "years,", "e", "http",
+                  "havent", "like", "need", "every", "know", "wrote", "make", "get", "need", "think", "put"
             }
 
 stop_words = set(stopwords.words('english')).union(excluded_words)
@@ -414,7 +417,8 @@ expanded_stopwords = set(stopwords.words('english')).union({'stated', 'going', '
                   "classes", "parents", "child", "staff", "families", "person", "percent", "work", "rain",
                   "year", "year,", "years.", "since", "last", "group", "whether", "asked", "new", "zealand", "say", "search",
                   "people", "way", "time", "point", "thing", "part", "something", "student", "te", "name", "m", "use",
-                  "say", "made", "month", "day", "moe", "years", "years.", "years,"
+                  "say", "made", "month", "day", "moe", "years", "years.", "years,", "e", "http",
+                  "havent", "like", "need", "every", "know", "wrote", "make", "get", "need", "think", "put"
                                                             })
 
 #convert date column to datetime format
@@ -497,38 +501,14 @@ for(year, month), group in grouped:
 keywords_df = pd.DataFrame(all_rows)
 keywords_df.to_excel("web_LDA_output.xlsx", index=False)
 
-#add a new column combined_content = tweet content + website content for combined analysis
-#Create 'combined_content' column by replacing 'NULL' in 'Hit Sentence' with the corresponding 'web_content' value
-#null in combined content means the web scraping can not scrap any content
-# df['combined_content'] = df.apply(lambda row: row['web_content'] if row['Hit Sentence'] == 'NULL' else row['Hit Sentence'], axis=1)
-# df['combined_content'] = df['combined_content'].replace('', 'NULL')
-# df['combined_content'] = df['combined_content'].str.lower()
 
-
-
-
-
-
-#Summary statistics
-#Twitter/Non-Twitter count
-count_dict={
-    'Count of Tweet links': twitter_count,
-    'Count of non Tweet links': non_twitter_count,
-    'Total count': twitter_count + non_twitter_count
-}
-summary_df = pd.DataFrame.from_dict(count_dict, orient='index')
-summary_df.columns = ['Count']
-print(summary_df)
-
-#transform the summary stats to new CSV file
-summary_df.to_csv('summary_stats.csv')
 
 
 
 
 
 #because csv would change ID to scientific notation, the format is changed to xlsx for the output
-df.to_excel('test_0920.xlsx',index=False)
+df.to_excel('result_1008.xlsx',index=False)
 
 
 
